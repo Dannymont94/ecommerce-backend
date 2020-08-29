@@ -66,7 +66,7 @@ router.post('/', async (req, res) => {
       }
     );
     // if no product tags, just respond
-    if (!tagIds.length) {
+    if (!tagIds || !Array.isArray(tagIds)) {
       res.status(200).json(productData);
       return;
     }
