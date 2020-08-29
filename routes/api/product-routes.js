@@ -52,17 +52,28 @@ router.post('/', async (req, res) => {
     }
   */
   try {
-    const product = await Product.create(req.body);
-
+    const { product_name, price, stock, category_id, tagIds } = req.body;
+    if (!product_name || !price || !stock || !category_id) {
+      res.status(404).json({ message: `Needs values for product_name, price, stock, category_id` });
+      return;
+    }
+    const productData = await Product.create(
+      {
+        product_name,
+        price,
+        stock,
+        category_id
+      }
+    );
     // if no product tags, just respond
-    if (!req.body.tagIds.length) {
-      res.status(200).json(product);
+    if (!tagIds.length) {
+      res.status(200).json(productData);
       return;
     }
     // if there are product tags, we need to create pairings to bulk create in the ProductTag model
-    const productTagIdArr = req.body.tagIds.map((tag_id) => {
+    const productTagIdArr = tagIds.map((tag_id) => {
       return {
-        product_id: product.id,
+        product_id: productData.id,
         tag_id
       };
     });
@@ -78,23 +89,36 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     // update product data
-    const product = await Product.update(req.body, {
-      where: {
-        id: req.params.id,
+    const { product_name, price, stock, category_id, tagIds } = req.body;
+    if (!product_name && !price && !stock && !category_id && !tagIds) {
+      res.status(404).json({ message: `Please send at least one value to update from the following: product_name, price, stock, category_id, tagIds` });
+      return;
+    }
+    const productData = await Product.update(
+      {
+        product_name,
+        price,
+        stock,
+        category_id
+      },
+      {
+        where: {
+          id: req.params.id,
       },
     });
-
-    if (!product) {
+    if (!productData) {
       res.status(404).json({ message: `No product found with that id` });
       return;
     }
-
-    // find all associated tags from ProductTag and store as array
+    // if no product tags, just respond
+    if (!tagIds.length) {
+      res.status(200).json(productData);
+      return;
+    }
+    // if there are tagIds, find all associated tags from ProductTag and store as array
     const productTags = await ProductTag.findAll({ where: { product_id: req.params.id } });
-
     // get array of current tag_ids
     const productTagIds = productTags.map(({ tag_id }) => tag_id);
-    
     // create filtered array of new product_ids by storing the tag_ids that were not in the array of current productTagIds
     const newProductTags = req.body.tagIds
       .filter((tag_id) => !productTagIds.includes(tag_id))
@@ -104,12 +128,10 @@ router.put('/:id', async (req, res) => {
           tag_id
         };
       });
-    
     // figure out which ones to remove by storing the tag_ids that were not in the req.body.tag_id array
     const productTagsToRemove = productTags
       .filter(({ tag_id }) => !req.body.tagIds.includes(tag_id))
       .map(({ id }) => id);
-
     // run both actions
     const updatedProductTags = await Promise.all([
       ProductTag.destroy({
@@ -119,7 +141,6 @@ router.put('/:id', async (req, res) => {
       }),
       ProductTag.bulkCreate(newProductTags),
     ]);
-
     res.status(200).json(updatedProductTags);
   } catch(err) {
       console.log(err);
@@ -135,7 +156,6 @@ router.delete('/:id', async (req, res) => {
         id: req.params.id
       }
     });
-
     if (!productData) {
       res.status(404).json({ message: `No product found with that id` });
       return;
